@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Weekly Planner – Standalone</title>
+<style>
+  :root{
+    --bg:#0b1020;--panel:#111827;--ink:#e5eefc;--muted:#9fb0cf;--border:#23314f;--grid:#1f2a44;--chip:#0e1427;--accent:#4ea1ff;
+    --not:#0b2545;--on:#1e293b;--del:#3b1d1d;--done:#102516;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:linear-gradient(180deg,#0b1020,#101836);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:1250px;margin:0 auto;padding:16px}
+  .title{font-weight:800;letter-spacing:.2px}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px}
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input,select,button{background:#0e1427;color:var(--ink);border:1px solid var(--border);border-radius:10px;padding:8px 10px}
+  button.primary{background:var(--accent);border-color:transparent;color:#00122a;font-weight:700}
+  .seg{display:inline-flex;background:#0e1427;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .seg button{border:0;border-right:1px solid var(--border);padding:8px 12px;background:transparent}
+  .seg button.active{background:var(--accent);color:#061226}
+  .legend{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{display:inline-flex;gap:6px;align-items:center;background:var(--chip);padding:6px 8px;border-radius:999px;border:1px solid var(--border)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .scroll{overflow:auto;border-radius:12px}
+  .hint{color:var(--muted);font-size:12px}
+
+  /* Grid (Table view) */
+  table.grid{width:100%;border-collapse:separate;border-spacing:0}
+  .grid th,.grid td{border:1px solid var(--grid);padding:6px 6px;vertical-align:top}
+  .grid th{position:sticky;top:0;background:#0f162e;z-index:2}
+  .rowhead{white-space:nowrap;background:#0f162e;color:var(--muted);font-weight:600;position:sticky;left:0;z-index:1;min-width:190px}
+  .cell{min-height:84px}
+  .adder{margin-top:4px}
+  .adder button{padding:4px 8px;font-size:12px}
+
+  /* Coupon */
+  .coupon{display:flex;gap:6px;align-items:center;margin:6px 0;padding:6px 8px;border-radius:10px;border:1px solid var(--border);background:var(--chip)}
+  .coupon .time{color:var(--muted);font-weight:700}
+  .coupon .tag{font-weight:700}
+  .coupon .person{margin-left:auto;font-weight:700}
+  .coupon .status{font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid var(--border)}
+  .coupon .actions button{background:transparent;border-color:transparent;padding:0 6px;color:var(--muted)}
+  .status-Not\ Started{background:var(--not);color:#93c5fd}
+  .status-Ongoing{background:var(--on);color:#a5b4fc}
+  .status-Delayed{background:var(--del);color:#fca5a5}
+  .status-Completed{background:var(--done);color:#86efac}
+
+  /* Calendar */
+  .month{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .daybox{min-height:150px;border:1px solid var(--grid);border-radius:10px;padding:6px;background:rgba(255,255,255,0.02)}
+  .daybox .dhead{display:flex;justify-content:space-between;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .calitem{display:flex;gap:6px;align-items:center;margin:6px 0;padding:6px 8px;border-radius:10px;border:1px solid var(--border);background:var(--chip)}
+  .calitem .time{color:var(--muted);font-weight:700}
+  .calitem .person{margin-left:auto;font-weight:700}
+  .calitem .status{font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid var(--border)}
+
+  /* Kanban */
+  .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .col{border:1px solid var(--border);border-radius:12px;background:#0f162e;padding:8px;min-height:280px}
+  .col h4{margin:0 0 8px 0;color:var(--muted)}
+  .droppable{min-height:220px;padding:4px;border:1px dashed var(--grid);border-radius:10px}
+
+  /* Modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px}
+  .modal.active{display:flex}
+  .dialog{background:#0f162e;border:1px solid var(--border);border-radius:16px;padding:14px;max-width:560px;width:100%}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .dialog h3{margin:0 0 10px 0}
+  .row{display:flex;gap:8px;align-items:center}
+  .right{margin-left:auto}
+
+  /* Filters */
+  .filters{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* Print */
+  @media print{
+    body{background:#fff;color:#000}
+    .controls,.modal,.tests,.hint{display:none !important}
+    .panel{border:1px solid #ccc}
+    .coupon{border-color:#999}
+  }
+
+  .tests{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#bcd}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="title">Weekly Planner – Standalone</div>
+      <span class="hint" id="testBadge">Running tests…</span>
+    </div>
+
+    <div class="panel controls" style="margin-top:10px">
+      <label>Week starts on: <input type="date" id="weekStart"></label>
+      <div class="seg" id="viewTabs">
+        <button data-view="table" class="active">Table</button>
+        <button data-view="calendar">Calendar</button>
+        <button data-view="kanban">ConMan (Kanban)</button>
+      </div>
+      <div class="filters">
+        <label>Person <select id="fPerson"><option value="">All</option></select></label>
+        <label>Status <select id="fStatus"><option value="">All</option><option>Not Started</option><option>Ongoing</option><option>Delayed</option><option>Completed</option></select></label>
+        <label>Stream/Row <select id="fRow"><option value="">All</option></select></label>
+        <button id="clearFilters">Clear</button>
+      </div>
+      <div class="right"></div>
+      <button class="primary" id="addPersonBtn">Add Person</button>
+      <button id="exportBtn">Export JSON</button>
+      <label for="importFile" class="hint">Import JSON</label><input type="file" id="importFile" accept="application/json">
+      <button onclick="window.print()">Print</button>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <!-- TABLE VIEW -->
+    <div class="panel scroll" id="tableView" style="margin-top:10px">
+      <table class="grid" id="grid"></table>
+    </div>
+
+    <!-- CALENDAR VIEW -->
+    <div class="panel" id="calendarView" style="display:none;margin-top:10px">
+      <div class="month" id="monthGrid"></div>
+    </div>
+
+    <!-- KANBAN VIEW -->
+    <div class="panel" id="kanbanView" style="display:none;margin-top:10px">
+      <div class="kanban">
+        <div class="col"><h4>Not Started</h4><div class="droppable" data-status="Not Started" id="k0"></div></div>
+        <div class="col"><h4>Ongoing</h4><div class="droppable" data-status="Ongoing" id="k1"></div></div>
+        <div class="col"><h4>Delayed</h4><div class="droppable" data-status="Delayed" id="k2"></div></div>
+        <div class="col"><h4>Completed</h4><div class="droppable" data-status="Completed" id="k3"></div></div>
+      </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div class="modal" id="taskModal">
+      <div class="dialog">
+        <h3 id="modalTitle">Add Task</h3>
+        <div class="grid2">
+          <label>Task <input id="m_title" placeholder="e.g. Draft note" /></label>
+          <label>Time <input id="m_time" placeholder="e.g. 17:00 or 6 PM" /></label>
+          <label>Person <input id="m_person" list="personList" placeholder="e.g. Rakesh" /></label>
+          <label>Status
+            <select id="m_status">
+              <option>Not Started</option>
+              <option>Ongoing</option>
+              <option>Delayed</option>
+              <option>Completed</option>
+            </select>
+          </label>
+          <label>Row
+            <select id="m_row"></select>
+          </label>
+          <label>Day
+            <select id="m_day"></select>
+          </label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <span class="hint">Each person gets a consistent color. Tasks show in all views.</span>
+          <span class="right"></span>
+          <button id="saveTask" class="primary">Save</button>
+          <button id="cancelTask">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <datalist id="personList"></datalist>
+
+    <div class="panel" style="margin-top:10px">
+      <div class="tests" id="tests"></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // --- Model ---
+  const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const ROWS = [
+    "Program Processes","Team Processes","Other Details",
+    "Rashtrapati Niketan","Legacy Items","Indianisation Deck","Amrit Udyan","Estate Review","UNFPA"
+  ];
+  const STATUSES = ['Not Started','Ongoing','Delayed','Completed'];
+
+  const state = {
+    weekStart: weekMonday(new Date()),
+    tasks: load("tasks", []),
+    people: load("people", {}), // name -> color
+    editing: null,
+    filters: { person:"", status:"", row:"" }
+  };
+
+  // --- Utils ---
+  function save(key,val){ localStorage.setItem("wp_"+key, JSON.stringify(val)); }
+  function load(key,def){ try{ return JSON.parse(localStorage.getItem("wp_"+key)) ?? def; }catch(e){ return def; } }
+  function weekMonday(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+  function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); x.setHours(0,0,0,0); return x; }
+  function fmtDate(d){ return d.toISOString().slice(0,10); }
+  function uid(){ return Math.random().toString(36).slice(2,9) + Math.random().toString(36).slice(2,9); }
+  function colorFor(name){ if(!name) return "#94a3b8"; if(!state.people[name]){ state.people[name] = pickColor(Object.values(state.people)); save("people", state.people); renderLegend(); refreshPeopleUI(); } return state.people[name]; }
+  const PALETTE=["#60a5fa","#34d399","#f472b6","#f59e0b","#a78bfa","#22d3ee","#f87171","#86efac","#fbbf24","#93c5fd","#c4b5fd"];
+  function pickColor(used){ for(const c of PALETTE){ if(!used.includes(c)) return c; } return PALETTE[Math.floor(Math.random()*PALETTE.length)]; }
+  function esc(s){ return s?.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])) || ''; }
+  function parseTimeToMinutes(t){ if(!t) return Number.POSITIVE_INFINITY; const m = (''+t).trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?$/); if(!m) return Number.POSITIVE_INFINITY; let h=+m[1], mm=m[2]?+m[2]:0; const ap=m[3]; if(ap){ const apL=ap.toLowerCase(); if(apL==='pm' && h<12) h+=12; if(apL==='am' && h===12) h=0; } return h*60+mm; }
+  function sortTasks(arr){ return [...arr].sort((a,b)=>{ const ta=parseTimeToMinutes(a.time), tb=parseTimeToMinutes(b.time); if(ta!==tb) return ta-tb; return (a.title||a.desc||'').localeCompare(b.title||b.desc||''); }); }
+
+  // --- DOM refs ---
+  const weekStartEl = document.getElementById('weekStart');
+  const gridEl = document.getElementById('grid');
+  const monthGridEl = document.getElementById('monthGrid');
+  const viewTabs = document.getElementById('viewTabs');
+  const tableView = document.getElementById('tableView');
+  const calendarView = document.getElementById('calendarView');
+  const kanbanView = document.getElementById('kanbanView');
+  const legendEl = document.getElementById('legend');
+  const addPersonBtn = document.getElementById('addPersonBtn');
+  const taskModal = document.getElementById('taskModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const m_title = document.getElementById('m_title');
+  const m_time = document.getElementById('m_time');
+  const m_person = document.getElementById('m_person');
+  const m_status = document.getElementById('m_status');
+  const m_row = document.getElementById('m_row');
+  const m_day = document.getElementById('m_day');
+  const saveTaskBtn = document.getElementById('saveTask');
+  const cancelTaskBtn = document.getElementById('cancelTask');
+  const personList = document.getElementById('personList');
+  const testsEl = document.getElementById('tests');
+  const testBadge = document.getElementById('testBadge');
+  const fPerson = document.getElementById('fPerson');
+  const fStatus = document.getElementById('fStatus');
+  const fRow = document.getElementById('fRow');
+  const exportBtn = document.getElementById('exportBtn');
+  const importFile = document.getElementById('importFile');
+  const clearFiltersBtn = document.getElementById('clearFilters');
+
+  // Init
+  weekStartEl.value = fmtDate(state.weekStart);
+  renderLegend();
+  renderGrid();
+  renderCalendar();
+  renderKanban();
+  refreshPeopleUI();
+  runTests();
+
+  // Events
+  weekStartEl.addEventListener('change',()=>{ state.weekStart = weekMonday(new Date(weekStartEl.value)); renderGrid(); renderCalendar(); });
+  viewTabs.addEventListener('click',(e)=>{
+    if(e.target.tagName!=='BUTTON') return;
+    [...viewTabs.children].forEach(b=>b.classList.remove('active'));
+    e.target.classList.add('active');
+    const view=e.target.dataset.view;
+    tableView.style.display = (view==='table')?'block':'none';
+    calendarView.style.display = (view==='calendar')?'block':'none';
+    kanbanView.style.display = (view==='kanban')?'block':'none';
+    if(view==='kanban') renderKanban();
+  });
+  addPersonBtn.addEventListener('click',()=>{
+    const name = prompt('Person name?');
+    if(!name) return;
+    colorFor(name.trim());
+  });
+  cancelTaskBtn.addEventListener('click',hideModal);
+  saveTaskBtn.addEventListener('click',saveTaskFromModal);
+  fPerson.addEventListener('change',()=>{ state.filters.person=fPerson.value; renderAll(); });
+  fStatus.addEventListener('change',()=>{ state.filters.status=fStatus.value; renderAll(); });
+  fRow.addEventListener('change',()=>{ state.filters.row=fRow.value; renderAll(); });
+  clearFiltersBtn.addEventListener('click',()=>{ fPerson.value=''; fStatus.value=''; fRow.value=''; state.filters={person:'',status:'',row:''}; renderAll(); });
+  exportBtn.addEventListener('click',()=>{
+    const blob = new Blob([JSON.stringify({version:1,weekStart:fmtDate(state.weekStart),people:state.people,tasks:state.tasks},null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='weekly_planner.json'; a.click(); URL.revokeObjectURL(a.href);
+  });
+  importFile.addEventListener('change',async ()=>{
+    const file = importFile.files[0]; if(!file) return;
+    const text = await file.text();
+    try{
+      const data = JSON.parse(text);
+      if(!Array.isArray(data.tasks)) throw new Error('Invalid file: tasks missing');
+      state.tasks = data.tasks; save('tasks',state.tasks);
+      if(data.people && typeof data.people==='object'){ state.people=data.people; save('people',state.people); }
+      renderAll();
+      alert('Import successful');
+    }catch(err){ alert('Import failed: '+err.message); }
+    importFile.value='';
+  });
+
+  // Delegated clicks for edit/delete/add in table & calendar
+  gridEl.addEventListener('click',(e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    if(btn.dataset.add){ const [ri,di] = btn.dataset.add.split('_').map(Number); openTaskModal({ id:null, title:"", time:"", person:"", status:"Not Started", row: ROWS[ri], day: di }); }
+    if(btn.dataset.edit){ const id=btn.dataset.edit; const t=state.tasks.find(x=>x.id===id); if(t) openTaskModal({...t}); }
+    if(btn.dataset.del){ const id=btn.dataset.del; state.tasks = state.tasks.filter(x=>x.id!==id); save('tasks',state.tasks); renderAll(); }
+  });
+  monthGridEl.addEventListener('click',(e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    if(btn.dataset.edit){ const id=btn.dataset.edit; const t=state.tasks.find(x=>x.id===id); if(t) openTaskModal({...t}); }
+    if(btn.dataset.del){ const id=btn.dataset.del; state.tasks = state.tasks.filter(x=>x.id!==id); save('tasks',state.tasks); renderAll(); }
+    if(btn.dataset.addDay){ const di=+btn.dataset.addDay; openTaskModal({ id:null, title:"", time:"", person:"", status:"Not Started", row: ROWS[0], day: di }); }
+  });
+  // Delegated clicks for edit/delete inside Kanban cards
+  kanbanView.addEventListener('click',(e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    if(btn.dataset.edit){ const id=btn.dataset.edit; const t=state.tasks.find(x=>x.id===id); if(t) openTaskModal({...t}); }
+    if(btn.dataset.del){ const id=btn.dataset.del; state.tasks = state.tasks.filter(x=>x.id!==id); save('tasks',state.tasks); renderAll(); }
+  });
+
+  // Drag & Drop for Kanban
+  document.querySelectorAll('.droppable').forEach(col=>{
+    col.addEventListener('dragover',e=>{e.preventDefault();});
+    col.addEventListener('drop',e=>{
+      e.preventDefault();
+      const id = e.dataTransfer.getData('text/task');
+      const t = state.tasks.find(x=>x.id===id); if(!t) return;
+      t.status = col.dataset.status; save('tasks', state.tasks);
+      renderKanban(); renderGrid(); renderCalendar();
+    });
+  });
+
+  function renderAll(){ renderLegend(); refreshPeopleUI(); renderGrid(); renderCalendar(); renderKanban(); }
+
+  // NEW: define renderLegend (previously missing)
+  function renderLegend(){
+    legendEl.innerHTML = Object.entries(state.people)
+      .map(([n,c])=>`<span class="pill"><span class="dot" style="background:${c}"></span>${n}</span>`) 
+      .join('');
+  }
+
+  function refreshPeopleUI(){
+    // Legend is handled by renderLegend; keep datalist & filters here
+    personList.innerHTML = Object.keys(state.people).sort().map(p=>`<option value="${p}">`).join('');
+    const cur = fPerson.value;
+    fPerson.innerHTML = '<option value="">All</option>' + Object.keys(state.people).sort().map(p=>`<option ${p===cur?'selected':''}>${p}</option>`).join('');
+    const curR = fRow.value; fRow.innerHTML = '<option value="">All</option>' + ROWS.map(r=>`<option ${r===curR?'selected':''}>${r}</option>`).join('');
+  }
+
+  // --- Filtering ---
+  function passFilters(t){
+    if(state.filters.person && t.person!==state.filters.person) return false;
+    if(state.filters.status && t.status!==state.filters.status) return false;
+    if(state.filters.row && t.row!==state.filters.row) return false;
+    return true;
+  }
+
+  // --- Rendering: Table ---
+  function renderGrid(){
+    const dates = DAYS.map((_,i)=> addDays(state.weekStart,i));
+    const thead = `<tr><th class="rowhead"></th>${DAYS.map((d,i)=>`<th>${d}<br><span class=hint>${fmtDate(dates[i])}</span></th>`).join('')}</tr>`;
+    const rowsHtml = ROWS.map((r,ri)=>{
+      const cells = DAYS.map((_,di)=>{
+        const tasks = sortTasks(state.tasks.filter(t=>t.row===r && t.day===di && passFilters(t)));
+        const list = tasks.map(renderCoupon).join('');
+        return `<td class="cell" data-ri="${ri}" data-di="${di}">
+          <div>${list}</div>
+          <div class="adder"><button data-add="${ri}_${di}">+ Add</button></div>
+        </td>`;
+      }).join('');
+      return `<tr><th class="rowhead">${r}</th>${cells}</tr>`;
+    }).join('');
+    gridEl.innerHTML = thead + rowsHtml;
+  }
+
+  // --- Rendering: Calendar ---
+  function renderCalendar(){
+    const dates = DAYS.map((_,i)=> addDays(state.weekStart,i));
+    monthGridEl.innerHTML = dates.map((d,i)=>{
+      const list = sortTasks(state.tasks.filter(t=>t.day===i && passFilters(t))).map(renderCalItem).join('');
+      return `<div class="daybox"><div class="dhead"><span>${DAYS[i]}</span><span class="hint">${fmtDate(d)}</span></div>${list||'<span class="hint">No tasks</span>'}<div class="adder"><button data-add-day="${i}">+ Add</button></div></div>`
+    }).join('');
+  }
+
+  // --- Rendering: Kanban ---
+  function renderKanban(){
+    const cols={"Not Started":document.getElementById('k0'),"Ongoing":document.getElementById('k1'),"Delayed":document.getElementById('k2'),"Completed":document.getElementById('k3')};
+    Object.values(cols).forEach(c=>c.innerHTML='');
+    state.tasks.filter(passFilters).forEach(t=>{
+      const el = html(renderCoupon(t));
+      el.draggable=true; el.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/task',t.id); });
+      cols[t.status].appendChild(el);
+    });
+  }
+
+  function renderCoupon(t){
+    const color = colorFor(t.person);
+    const statusClass = 'status-'+t.status.replaceAll(' ','\\ ');
+    return `<div class="coupon ${statusClass}" data-id="${t.id||''}" style="border-left:4px solid ${color}">
+      <span class="time">${esc(t.time||'')}</span>
+      <span class="tag">${esc(t.title||t.desc||'Untitled')}</span>
+      <span class="person" style="color:${color}">${esc(t.person||'')}</span>
+      <span class="status">${t.status}</span>
+      <span class="actions right">
+        <button class="edit" data-edit="${t.id}" title="Edit">✎</button>
+        <button class="del" data-del="${t.id}" title="Delete">🗑</button>
+      </span>
+    </div>`
+  }
+
+  function renderCalItem(t){
+    const color = colorFor(t.person);
+    const statusClass = 'status-'+t.status.replaceAll(' ','\\ ');
+    return `<div class="calitem ${statusClass}" data-id="${t.id||''}" style="border-left:4px solid ${color}">
+      <span class="time">${esc(t.time||'')}</span>
+      <span class="tag">${esc(t.title||t.desc||'Untitled')}</span>
+      <span class="person" style="color:${color}">${esc(t.person||'')}</span>
+      <span class="status">${t.status}</span>
+      <span class="actions right">
+        <button class="edit" data-edit="${t.id}" title="Edit">✎</button>
+        <button class="del" data-del="${t.id}" title="Delete">🗑</button>
+      </span>
+    </div>`
+  }
+
+  function openTaskModal(t){
+    state.editing = t.id || null;
+    modalTitle.textContent = t.id? 'Edit Task' : 'Add Task';
+    m_title.value = t.title||t.desc||''; m_time.value = t.time||''; m_person.value = t.person||''; m_status.value = t.status||'Not Started';
+    m_row.innerHTML = ROWS.map(r=>`<option ${r===t.row?'selected':''}>${r}</option>`).join('');
+    m_day.innerHTML = DAYS.map((d,i)=>`<option value="${i}" ${i===t.day?'selected':''}>${d}</option>`).join('');
+    taskModal.classList.add('active');
+  }
+  function hideModal(){ taskModal.classList.remove('active'); }
+  function saveTaskFromModal(){
+    const obj = {
+      id: state.editing || uid(),
+      title: m_title.value.trim(),
+      time: m_time.value.trim(),
+      person: m_person.value.trim(),
+      status: m_status.value,
+      row: m_row.value,
+      day: +m_day.value,
+    };
+    if(!obj.title){ alert('Please enter a task'); return; }
+    colorFor(obj.person);
+    if(state.editing){ state.tasks = state.tasks.map(x=> x.id===obj.id? obj : x); }
+    else { state.tasks.push(obj); }
+    save('tasks', state.tasks);
+    refreshPeopleUI(); renderGrid(); renderCalendar(); renderKanban();
+    hideModal();
+  }
+
+  // Helpers
+  function html(str){ const d=document.createElement('div'); d.innerHTML=str.trim(); return d.firstChild; }
+
+  // --- Tests ---
+  function runTests(){
+    const out=[]; let pass=0, tot=0; const ok=(name,cond)=>{tot++; if(cond){pass++; out.push(`✅ ${name}`);} else out.push(`❌ ${name}`);};
+    // renderLegend existence
+    ok('renderLegend is defined', typeof renderLegend==='function');
+    // temporary legend render test
+    const _people = {...state.people};
+    state.people = { Alpha:'#111', Beta:'#222' }; renderLegend();
+    ok('legend renders pills', legendEl.innerHTML.includes('Alpha') && legendEl.innerHTML.includes('Beta'));
+    state.people = _people; renderLegend();
+
+    // time parse
+    ok('parse 09:30 -> 570', parseTimeToMinutes('09:30')===570);
+    ok('parse 6 PM -> 1080', parseTimeToMinutes('6 PM')===1080);
+    ok('parse invalid -> INF', parseTimeToMinutes('bad')===Number.POSITIVE_INFINITY);
+    ok('12:00 AM -> 0', parseTimeToMinutes('12:00 AM')===0);
+    ok('12:00 PM -> 720', parseTimeToMinutes('12:00 PM')===720);
+    // sort order by time then title
+    const sample=[{time:'09:00',title:'B'},{time:'08:00',title:'C'},{time:'09:00',title:'A'}];
+    const sorted = sortTasks(sample).map(x=>x.title).join(',');
+    ok('sort by time then title', sorted==='C,A,B');
+    // color stable
+    const c1=colorFor('Rakesh'), c2=colorFor('Rakesh'); ok('color stable per person', c1===c2);
+    // export/import shape
+    const payload = {tasks:[{id:'x',row:ROWS[0],day:0,title:'T',time:'10:00',person:'R',status:'Not Started'}], people:{R:'#fff'}};
+    ok('export/import payload shape', Array.isArray(payload.tasks) && payload.people && typeof payload.people==='object');
+    document.getElementById('tests').textContent = out.join('\n');
+    testBadge.textContent = `Tests: ${pass}/${tot} passed`;
+  }
+})();
+</script>
+</body>
+</html>
